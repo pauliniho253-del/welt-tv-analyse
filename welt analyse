@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WELT TV Tagesanalyse</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --welt-blue: #003366; --welt-red: #cc0000; --success: #22c55e; --warning: #f59e0b; --danger: #ef4444; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; color: #1e293b; }
+
+        .header {
+            background: linear-gradient(135deg, var(--welt-blue), #004080);
+            color: white;
+            padding: 1.5rem 2rem;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .header-left h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+        .header-left p { opacity: 0.8; font-size: 0.9rem; }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .day-dropdown { display: flex; align-items: center; gap: 0.5rem; }
+        .day-dropdown label { font-weight: 500; font-size: 0.9rem; }
+        .day-dropdown select {
+            padding: 0.5rem 2rem 0.5rem 0.75rem;
+            font-size: 0.95rem;
+            border: none;
+            border-radius: 8px;
+            background: white;
+            color: var(--welt-blue);
+            font-weight: 600;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23003366' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+        }
+
+        .upload-area {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .upload-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-btn:hover { background: #16a34a; transform: scale(1.02); }
+        .upload-btn svg { width: 18px; height: 18px; }
+
+        #fileInput { display: none; }
+
+        .upload-status {
+            background: rgba(255,255,255,0.2);
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            display: none;
+        }
+        .upload-status.show { display: block; }
+        .upload-status.success { background: rgba(34, 197, 94, 0.3); }
+        .upload-status.error { background: rgba(239, 68, 68, 0.3); }
+
+        .days-info {
+            background: rgba(255,255,255,0.1);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .days-info span { opacity: 0.9; }
+        .days-count { font-weight: 600; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+
+        .welcome-card {
+            background: linear-gradient(135deg, #dbeafe, #eff6ff);
+            border: 2px dashed var(--welt-blue);
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .welcome-card h2 { color: var(--welt-blue); margin-bottom: 1rem; font-size: 1.5rem; }
+        .welcome-card p { color: #475569; margin-bottom: 1.5rem; }
+        .welcome-card .upload-btn-large {
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            background: var(--welt-blue);
+        }
+        .welcome-card .upload-btn-large:hover { background: #004080; }
+
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+        .kpi-card { background: white; border-radius: 12px; padding: 1.25rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .kpi-value { font-size: 2rem; font-weight: 700; color: var(--welt-blue); }
+        .kpi-label { font-size: 0.85rem; color: #64748b; margin-top: 0.25rem; }
+
+        .section { margin-bottom: 2.5rem; }
+        .section-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+        .section-icon { font-size: 1.5rem; }
+        .section-title { font-size: 1.25rem; font-weight: 700; color: var(--welt-blue); }
+        .section-badge { background: var(--welt-blue); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+
+        .card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+
+        .ranking-header { padding: 1rem 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+        .ranking-header.top { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; }
+        .ranking-header.bottom { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; }
+
+        .ranking-item { display: flex; align-items: center; padding: 0.875rem 1.25rem; border-bottom: 1px solid #f1f5f9; gap: 1rem; }
+        .ranking-item:last-child { border-bottom: none; }
+        .ranking-item:hover { background: #f8fafc; }
+
+        .rank-number { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0; }
+        .rank-number.top { background: #dcfce7; color: #166534; }
+        .rank-number.bottom { background: #fee2e2; color: #991b1b; }
+        .rank-number.gold { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: white; }
+
+        .rank-info { flex: 1; min-width: 0; }
+        .rank-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rank-time { font-size: 0.8rem; color: #64748b; }
+
+        .rank-ma { font-weight: 700; font-size: 1.1rem; white-space: nowrap; }
+        .rank-ma.top { color: var(--success); }
+        .rank-ma.bottom { color: var(--danger); }
+
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; font-weight: 600; color: #475569; text-transform: uppercase; font-size: 0.75rem; position: sticky; top: 0; }
+        tr:hover { background: #f8fafc; }
+
+        .trend-up { color: var(--success); font-weight: 600; }
+        .trend-down { color: var(--danger); font-weight: 600; }
+
+        .badge { padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; white-space: nowrap; }
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+
+        .ma-bar { height: 6px; background: #e2e8f0; border-radius: 3px; width: 80px; display: inline-block; vertical-align: middle; margin-left: 8px; }
+        .ma-bar-fill { height: 100%; border-radius: 3px; }
+
+        .chart-container { height: 280px; padding: 1.25rem; }
+
+        .focus-card { background: linear-gradient(135deg, #eff6ff, #dbeafe); border: 2px solid #bfdbfe; }
+        .focus-header { padding: 1rem 1.25rem; border-bottom: 1px solid #bfdbfe; }
+        .focus-header h3 { color: var(--welt-blue); font-size: 1rem; margin-bottom: 0.25rem; }
+        .focus-header p { font-size: 0.8rem; color: #475569; }
+        .focus-table { background: white; margin: 1rem; border-radius: 8px; overflow: hidden; }
+        .focus-table table { margin: 0; }
+
+        .no-data { padding: 2rem; text-align: center; color: #64748b; }
+
+        #dashboard { display: none; }
+        #welcome { display: block; }
+
+        .loading {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            color: white;
+        }
+        .loading.show { display: flex; }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .debug-info {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            display: none;
+        }
+
+        @media (max-width: 900px) {
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .header-top { flex-direction: column; text-align: center; }
+            .header-controls { justify-content: center; }
+            #focusTopList, #focusBottomList { max-height: 250px !important; }
+        }
+
+        @media (max-width: 768px) {
+            .section > div[style*="grid-template-columns: 1fr 1fr"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-top">
+            <div class="header-left">
+                <h1>📺 WELT TV Tagesanalyse</h1>
+                <p>Quoten-Analyse mit Lead-In Effekten</p>
+            </div>
+            <div class="header-controls">
+                <div class="day-dropdown">
+                    <label for="daySelect">📅 Tag:</label>
+                    <select id="daySelect" onchange="selectDay(this.value)">
+                        <option value="">-- Bitte Datei hochladen --</option>
+                    </select>
+                </div>
+                <div class="upload-area">
+                    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple onchange="handleFileUpload(event)">
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        Neuen Tag hochladen
+                    </button>
+                </div>
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <span>Verarbeite...</span>
+                </div>
+                <div class="upload-status" id="uploadStatus"></div>
+            </div>
+        </div>
+        <div class="days-info" id="daysInfo" style="display: none;">
+            <span>📊 <span class="days-count" id="totalDays">0</span> Tage geladen</span>
+            <span>📅 Zeitraum: <span id="dateRange">-</span></span>
+            <span>📈 Gesamt: <span id="totalShows">0</span> Sendungen analysiert</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Debug Info -->
+        <div class="debug-info" id="debugInfo"></div>
+
+        <!-- Welcome Screen -->
+        <div id="welcome">
+            <div class="welcome-card">
+                <h2>👋 Willkommen zur WELT TV Tagesanalyse</h2>
+                <p>Laden Sie eine oder mehrere TVSwift Excel-Dateien hoch, um die Analyse zu starten.<br>
+                Die Analyse erfolgt direkt im Browser – keine Installation notwendig!</p>
+                <button class="upload-btn upload-btn-large" onclick="document.getElementById('fileInput').click()">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:24px;height:24px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                    Excel-Dateien auswählen
+                </button>
+                <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #64748b;">
+                    💡 Tipp: Sie können mehrere Dateien gleichzeitig auswählen!
+                </p>
+            </div>
+        </div>
+
+        <!-- Dashboard (hidden until data loaded) -->
+        <div id="dashboard">
+            <div class="kpi-grid">
+                <div class="kpi-card"><div class="kpi-value" id="kpi-date">-</div><div class="kpi-label">Datum</div></div>
+                <div class="kpi-card"><div class="kpi-value" id="kpi-avg">-</div><div class="kpi-label">Ø Marktanteil</div></div>
+                <div class="kpi-card"><div class="kpi-value" id="kpi-count">-</div><div class="kpi-label">Sendungen</div></div>
+                <div class="kpi-card"><div class="kpi-value" id="kpi-best">-</div><div class="kpi-label">Beste Stunde</div></div>
+            </div>
+
+            <!-- 1. TOP 5 -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">🏆</span>
+                    <span class="section-title">Top 5 Sendungen</span>
+                </div>
+                <div class="card">
+                    <div class="ranking-header top">📈 Beste Performance des Tages</div>
+                    <div id="topList"></div>
+                </div>
+            </div>
+
+            <!-- 2. BOTTOM 5 -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">⚠️</span>
+                    <span class="section-title">Bottom 5 Sendungen</span>
+                </div>
+                <div class="card">
+                    <div class="ranking-header bottom">📉 Schwächste Performance des Tages</div>
+                    <div id="bottomList"></div>
+                </div>
+            </div>
+
+            <!-- 3. ALLE SENDUNGEN -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">📋</span>
+                    <span class="section-title">Alle Sendungen</span>
+                    <span class="section-badge" id="allCount">0 Sendungen</span>
+                </div>
+                <div class="card">
+                    <div class="table-container" style="max-height: 500px; overflow-y: auto;">
+                        <table id="allShowsTable">
+                            <thead>
+                                <tr>
+                                    <th>Zeit</th>
+                                    <th>Sendung</th>
+                                    <th>Kategorie</th>
+                                    <th>MA%</th>
+                                    <th>Lead-In Δ</th>
+                                    <th>Bewertung</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. TAGESVERLAUF -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">📈</span>
+                    <span class="section-title">Tagesverlauf</span>
+                </div>
+                <div class="card">
+                    <div class="chart-container"><canvas id="hourlyChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- 5. FORMAT-ANALYSE -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">⭐</span>
+                    <span class="section-title">Format-Analyse</span>
+                    <span class="section-badge" id="focusCount">0 Sendungen</span>
+                </div>
+
+                <!-- LEGENDE / ERKLÄRUNG DER BEWERTUNGSKRITERIEN -->
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem 1.25rem; background: linear-gradient(135deg, #f0f9ff, #e0f2fe); border: 1px solid #bae6fd;">
+                    <h4 style="color: var(--welt-blue); margin-bottom: 0.75rem; font-size: 0.95rem;">📋 So funktioniert die Bewertung (Lead-In basiert)</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; font-size: 0.85rem;">
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #1e3a5f;">Lead-In Bewertung (entscheidend):</div>
+                            <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                                <span><span style="background:#dcfce7;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;color:#166534;">✅ Funktioniert</span> = Positiver Lead-In (mehr Zuschauer als Vorgänger)</span>
+                                <span><span style="background:#fee2e2;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600;color:#991b1b;">❌ Nicht funktioniert</span> = Negativer Lead-In (weniger Zuschauer als Vorgänger)</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #1e3a5f;">Lead-In Berechnung:</div>
+                            <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                                <span><span style="color:#22c55e;font-weight:600;">+X.XX%</span> = Sendung hat X.XX% mehr MA als Vorgänger → 📈 Zuschauer gewonnen</span>
+                                <span><span style="color:#ef4444;font-weight:600;">-X.XX%</span> = Sendung hat X.XX% weniger MA als Vorgänger → 📉 Zuschauer verloren</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #1e3a5f;">Marktanteil (zur Info):</div>
+                            <div style="display: flex; flex-direction: column; gap: 0.35rem; color: #64748b;">
+                                <span>Der absolute MA% wird angezeigt, ist aber <strong>nicht</strong> ausschlaggebend für die Bewertung.</span>
+                                <span>Entscheidend ist nur: Hat die Sendung Zuschauer vom Vorgänger gehalten/gewonnen?</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zusammenfassung pro Format -->
+                <div class="card" style="margin-bottom: 1rem; padding: 1.25rem;">
+                    <h4 style="color: var(--welt-blue); margin-bottom: 1rem; font-size: 1rem;">📊 Übersicht nach Format</h4>
+                    <div id="formatSummary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;"></div>
+                </div>
+
+                <!-- Formate die funktioniert haben / nicht funktioniert haben -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div class="card">
+                        <div class="ranking-header top">✅ Formate die funktioniert haben (positiver Lead-In)</div>
+                        <div id="focusTopList" style="max-height: 350px; overflow-y: auto;"></div>
+                        <div class="no-data" id="noFocusTop" style="display:none;">Keine Formate mit positivem Lead-In heute</div>
+                    </div>
+                    <div class="card">
+                        <div class="ranking-header bottom">❌ Formate die NICHT funktioniert haben (negativer Lead-In)</div>
+                        <div id="focusBottomList" style="max-height: 350px; overflow-y: auto;"></div>
+                        <div class="no-data" id="noFocusBottom" style="display:none;">Keine Formate mit negativem Lead-In heute</div>
+                    </div>
+                </div>
+
+                <!-- Detaillierte Tabelle -->
+                <div class="card focus-card">
+                    <div class="focus-header">
+                        <h3>Alle Formate im Detail</h3>
+                        <p>Meine WELT Meine Meinung • KI-WELT • ICON TV • Meinungsfreiheit • PK/Lives • Börse • Deffner & Zschäpitz</p>
+                    </div>
+                    <div class="focus-table" id="focusTableContainer">
+                        <table id="focusTable">
+                            <thead>
+                                <tr>
+                                    <th>Zeit</th>
+                                    <th>Sendung</th>
+                                    <th>Kategorie</th>
+                                    <th>MA%</th>
+                                    <th>Seher</th>
+                                    <th>Vorgänger</th>
+                                    <th>Lead-In Δ</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="no-data" id="noFocusMsg" style="display:none;">Keine Fokus-Sendungen an diesem Tag</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ============================================================
+    // FOKUS-SENDUNGEN KONFIGURATION
+    // ============================================================
+    const FOCUS_KEYWORDS = {
+        'Meine WELT Meine Meinung': ['meine welt', 'meine meinung'],
+        'KI-WELT': ['ki-welt', 'ki welt'],
+        'ICON TV': ['icon'],
+        'Meinungsfreiheit': ['meinungsfreiheit'],
+        'LIVE (PK/Statements)': ['welt-live'],
+        'Börse': ['börse', 'börsenflash'],
+        'Deffner & Zschäpitz': ['deffner', 'zschäpitz']
+    };
+
+    // Global data storage
+    let allDaysData = {};
+    let hourlyChart = null;
+
+    // ============================================================
+    // HELPER FUNCTIONS
+    // ============================================================
+    function isFocusShow(titel) {
+        if (!titel) return null;
+        const titelLower = String(titel).toLowerCase();
+        for (const [category, keywords] of Object.entries(FOCUS_KEYWORDS)) {
+            for (const kw of keywords) {
+                if (titelLower.includes(kw)) return category;
+            }
+        }
+        return null;
+    }
+
+    function kategorisiereSendung(titel) {
+        if (!titel) return 'Sonstige';
+        const titelLower = String(titel).toLowerCase();
+        const focus = isFocusShow(titel);
+        if (focus) return focus;
+
+        if (titelLower.includes('welt am morgen')) return 'Die Welt am Morgen';
+        if (titelLower.includes('welt am mittag')) return 'Die Welt am Mittag';
+        if (titelLower.includes('welt am abend')) return 'Die Welt am Abend';
+        if (titelLower.includes('newsroom')) return 'WELT Newsroom';
+        if (titelLower.includes('welt-spezial')) return 'WELT Spezial';
+        if (titelLower.includes('dokumentation')) return 'Dokumentation';
+        if (titelLower.includes('reportage')) return 'Reportage';
+        if (titelLower.includes('basketball') || titelLower.includes('sport')) return 'Sport';
+        if (titelLower.includes('nachrichten') || titelLower.includes('wetter')) return 'Nachrichten/Wetter';
+        return 'Sonstige';
+    }
+
+    function parseExcelTime(value) {
+        // Excel stores time as fraction of day (0.0 = 00:00, 0.5 = 12:00, etc.)
+        if (typeof value === 'number') {
+            const totalMinutes = Math.round(value * 24 * 60);
+            const hour = Math.floor(totalMinutes / 60) % 24;
+            const minute = totalMinutes % 60;
+            return { hour, minute, second: 0 };
+        }
+        // Try parsing as string HH:MM:SS
+        if (typeof value === 'string') {
+            const match = value.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+            if (match) {
+                return {
+                    hour: parseInt(match[1]),
+                    minute: parseInt(match[2]),
+                    second: parseInt(match[3] || 0)
+                };
+            }
+        }
+        return null;
+    }
+
+    function isInTimeRange(time, startHour = 6, endHour = 20) {
+        if (!time) return false;
+        return time.hour >= startHour && time.hour <= endHour;
+    }
+
+    function timeToString(time) {
+        if (!time) return '';
+        return `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
+    }
+
+    function showStatus(message, isError = false) {
+        const status = document.getElementById('uploadStatus');
+        status.textContent = message;
+        status.classList.add('show');
+        status.classList.toggle('success', !isError);
+        status.classList.toggle('error', isError);
+        setTimeout(() => status.classList.remove('show'), 4000);
+    }
+
+    // ============================================================
+    // FILE PROCESSING
+    // ============================================================
+    async function handleFileUpload(event) {
+        const files = event.target.files;
+        if (!files.length) return;
+
+        const loading = document.getElementById('loading');
+        loading.classList.add('show');
+
+        let processed = 0;
+        let errors = 0;
+
+        for (const file of files) {
+            try {
+                console.log('Processing file:', file.name);
+                const data = await readExcelFile(file);
+                if (data && data.shows.length > 0) {
+                    allDaysData[data.date] = data;
+                    processed++;
+                    console.log('Successfully processed:', data.date, 'with', data.shows.length, 'shows');
+                } else {
+                    console.warn('No valid data found in file:', file.name);
+                    errors++;
+                }
+            } catch (e) {
+                console.error('Error processing file:', file.name, e);
+                errors++;
+            }
+        }
+
+        loading.classList.remove('show');
+
+        if (processed > 0) {
+            showStatus(`✓ ${processed} Tag(e) erfolgreich geladen`);
+            updateUI();
+        } else if (errors > 0) {
+            showStatus(`⚠ Fehler beim Verarbeiten der Datei(en)`, true);
+        }
+
+        // Reset file input
+        event.target.value = '';
+    }
+
+    async function readExcelFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
+
+                    console.log('Raw Excel data rows:', json.length);
+                    console.log('First row:', json[0]);
+                    console.log('Second row:', json[1]);
+                    console.log('Third row:', json[2]);
+
+                    // Extract date from header (first row, first cell)
+                    const header = String(json[0]?.[0] || '');
+                    const dateMatch = header.match(/(\d{2}\.\d{2}\.\d{4})/);
+                    const dateStr = dateMatch ? dateMatch[1] : 'Unbekannt';
+                    console.log('Extracted date:', dateStr);
+
+                    // Process rows - data starts at row index 2 (third row)
+                    // Row 0 = Header with date
+                    // Row 1 = Column headers (Sender, Sendungstitel, Startzeit, etc.)
+                    // Row 2+ = Data
+                    const shows = [];
+
+                    for (let i = 2; i < json.length; i++) {
+                        const row = json[i];
+                        if (!row || row.length < 5) continue;
+
+                        // Column indices based on actual Excel structure:
+                        // 0: Sender, 1: Sendungstitel, 2: Startzeit, 3: SB (Mio), 4: MA %, 5: Seher (Mio)
+                        const titel = row[1];
+                        const zeitRaw = row[2];
+                        const ma = parseFloat(row[4]);
+                        const seher = parseFloat(row[5]);
+
+                        if (!titel) continue;
+
+                        const time = parseExcelTime(zeitRaw);
+
+                        // Filter: only 06:00 - 20:00
+                        if (!isInTimeRange(time)) continue;
+
+                        shows.push({
+                            zeit: time,
+                            zeitStr: timeToString(time),
+                            titel: String(titel),
+                            kategorie: kategorisiereSendung(titel),
+                            isFokus: isFocusShow(titel) !== null,
+                            ma: isNaN(ma) ? 0 : ma,
+                            seher: isNaN(seher) ? 0 : seher
+                        });
+                    }
+
+                    console.log('Parsed shows:', shows.length);
+
+                    // Sort by time
+                    shows.sort((a, b) => {
+                        if (!a.zeit || !b.zeit) return 0;
+                        return (a.zeit.hour * 60 + a.zeit.minute) - (b.zeit.hour * 60 + b.zeit.minute);
+                    });
+
+                    // Calculate Lead-In
+                    for (let i = 1; i < shows.length; i++) {
+                        shows[i].prevSendung = shows[i - 1].titel;
+                        shows[i].leadIn = shows[i].ma - shows[i - 1].ma;
+                    }
+
+                    // Calculate hourly averages
+                    const hourly = {};
+                    shows.forEach(s => {
+                        if (s.zeit) {
+                            const h = s.zeit.hour;
+                            if (!hourly[h]) hourly[h] = { sum: 0, count: 0 };
+                            hourly[h].sum += s.ma;
+                            hourly[h].count++;
+                        }
+                    });
+                    for (const h in hourly) {
+                        hourly[h] = Math.round((hourly[h].sum / hourly[h].count) * 100) / 100;
+                    }
+
+                    const avgMa = shows.length ? Math.round((shows.reduce((s, x) => s + x.ma, 0) / shows.length) * 100) / 100 : 0;
+
+                    resolve({
+                        date: dateStr,
+                        shows: shows,
+                        hourly: hourly,
+                        avgMa: avgMa
+                    });
+                } catch (err) {
+                    console.error('Error parsing Excel:', err);
+                    reject(err);
+                }
+            };
+            reader.onerror = (err) => {
+                console.error('FileReader error:', err);
+                reject(err);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // ============================================================
+    // UI UPDATE
+    // ============================================================
+    function updateUI() {
+        const dates = Object.keys(allDaysData).sort().reverse();
+        if (dates.length === 0) return;
+
+        // Show dashboard, hide welcome
+        document.getElementById('welcome').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        document.getElementById('daysInfo').style.display = 'flex';
+
+        // Update dropdown
+        const select = document.getElementById('daySelect');
+        select.innerHTML = '';
+        dates.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = d;
+            select.appendChild(opt);
+        });
+
+        // Update info bar
+        document.getElementById('totalDays').textContent = dates.length;
+        document.getElementById('dateRange').textContent = dates.length > 1
+            ? `${dates[dates.length - 1]} - ${dates[0]}`
+            : dates[0];
+        const totalShows = Object.values(allDaysData).reduce((s, d) => s + d.shows.length, 0);
+        document.getElementById('totalShows').textContent = totalShows;
+
+        // Render first day
+        selectDay(dates[0]);
+    }
+
+    function selectDay(date) {
+        document.getElementById('daySelect').value = date;
+        renderDay(allDaysData[date]);
+    }
+
+    function renderDay(day) {
+        if (!day || !day.shows || day.shows.length === 0) {
+            console.warn('No data to render');
+            return;
+        }
+
+        console.log('Rendering day:', day.date, 'with', day.shows.length, 'shows');
+
+        // KPIs
+        document.getElementById('kpi-date').textContent = day.date;
+        document.getElementById('kpi-avg').textContent = day.avgMa.toFixed(2) + '%';
+        document.getElementById('kpi-count').textContent = day.shows.length;
+
+        const bestHour = Object.entries(day.hourly).sort((a, b) => b[1] - a[1])[0];
+        document.getElementById('kpi-best').textContent = bestHour ? bestHour[0] + ':00' : '-';
+
+        const maxMA = Math.max(...day.shows.map(s => s.ma), 1);
+
+        // TOP 5
+        const top5 = [...day.shows].sort((a, b) => b.ma - a.ma).slice(0, 5);
+        const topList = document.getElementById('topList');
+        topList.innerHTML = '';
+        top5.forEach((s, i) => {
+            topList.innerHTML += `
+                <div class="ranking-item">
+                    <div class="rank-number ${i === 0 ? 'gold' : 'top'}">${i + 1}</div>
+                    <div class="rank-info">
+                        <div class="rank-title">${s.titel.substring(0, 55)}</div>
+                        <div class="rank-time">${s.zeitStr} Uhr • ${s.kategorie}</div>
+                    </div>
+                    <div class="rank-ma top">${s.ma.toFixed(2)}%</div>
+                </div>
+            `;
+        });
+
+        // BOTTOM 5
+        const bottom5 = [...day.shows].sort((a, b) => a.ma - b.ma).slice(0, 5);
+        const bottomList = document.getElementById('bottomList');
+        bottomList.innerHTML = '';
+        bottom5.forEach((s, i) => {
+            bottomList.innerHTML += `
+                <div class="ranking-item">
+                    <div class="rank-number bottom">${i + 1}</div>
+                    <div class="rank-info">
+                        <div class="rank-title">${s.titel.substring(0, 55)}</div>
+                        <div class="rank-time">${s.zeitStr} Uhr • ${s.kategorie}</div>
+                    </div>
+                    <div class="rank-ma bottom">${s.ma.toFixed(2)}%</div>
+                </div>
+            `;
+        });
+
+        // ALL SHOWS
+        document.getElementById('allCount').textContent = day.shows.length + ' Sendungen';
+        const allTbody = document.querySelector('#allShowsTable tbody');
+        allTbody.innerHTML = '';
+        day.shows.forEach(s => {
+            const leadClass = s.leadIn > 0 ? 'trend-up' : s.leadIn < 0 ? 'trend-down' : '';
+            const leadText = s.leadIn !== undefined ? (s.leadIn > 0 ? '+' : '') + s.leadIn.toFixed(2) + '%' : '-';
+            const rating = s.ma >= 4 ? 'success' : s.ma >= 2 ? 'warning' : 'danger';
+            const ratingText = s.ma >= 4 ? '★★★ Stark' : s.ma >= 2 ? '★★ Mittel' : '★ Schwach';
+            const barWidth = (s.ma / maxMA) * 100;
+            const barColor = rating === 'success' ? '#22c55e' : rating === 'warning' ? '#f59e0b' : '#ef4444';
+
+            allTbody.innerHTML += `<tr>
+                <td><strong>${s.zeitStr}</strong></td>
+                <td>${s.titel.substring(0, 50)}</td>
+                <td>${s.kategorie}</td>
+                <td>
+                    <strong>${s.ma.toFixed(2)}%</strong>
+                    <span class="ma-bar"><span class="ma-bar-fill" style="width:${barWidth}%;background:${barColor}"></span></span>
+                </td>
+                <td class="${leadClass}">${leadText}</td>
+                <td><span class="badge badge-${rating}">${ratingText}</span></td>
+            </tr>`;
+        });
+
+        // CHART
+        const hours = Object.keys(day.hourly).sort((a, b) => parseInt(a) - parseInt(b));
+        const values = hours.map(h => day.hourly[h]);
+
+        if (hourlyChart) hourlyChart.destroy();
+        hourlyChart = new Chart(document.getElementById('hourlyChart'), {
+            type: 'line',
+            data: {
+                labels: hours.map(h => h + ':00'),
+                datasets: [{
+                    label: 'Ø MA%',
+                    data: values,
+                    borderColor: '#003366',
+                    backgroundColor: 'rgba(0,51,102,0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 6,
+                    pointBackgroundColor: values.map(v => v >= 4 ? '#22c55e' : v >= 2 ? '#f59e0b' : '#ef4444'),
+                    pointBorderColor: 'white',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => `${ctx.raw.toFixed(2)}% MA` } }
+                },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Marktanteil %' } },
+                    x: { title: { display: true, text: 'Uhrzeit' } }
+                }
+            }
+        });
+
+        // FOCUS SHOWS - Erweiterte Analyse
+        const focusShows = day.shows.filter(s => s.isFokus);
+        document.getElementById('focusCount').textContent = focusShows.length + ' Sendungen';
+
+        // 1. Format-Zusammenfassung
+        const formatSummary = document.getElementById('formatSummary');
+        formatSummary.innerHTML = '';
+
+        const formatGroups = {};
+        focusShows.forEach(s => {
+            if (!formatGroups[s.kategorie]) {
+                formatGroups[s.kategorie] = { shows: [], totalMa: 0 };
+            }
+            formatGroups[s.kategorie].shows.push(s);
+            formatGroups[s.kategorie].totalMa += s.ma;
+        });
+
+        // Alle Fokus-Kategorien anzeigen (auch wenn 0)
+        const allFocusCategories = Object.keys(FOCUS_KEYWORDS);
+        allFocusCategories.forEach(cat => {
+            const data = formatGroups[cat];
+            const count = data ? data.shows.length : 0;
+            const avgMa = data ? (data.totalMa / count).toFixed(2) : '-';
+            const best = data ? Math.max(...data.shows.map(s => s.ma)).toFixed(2) : '-';
+            const rating = data && (data.totalMa / count) >= 4 ? 'success' : data && (data.totalMa / count) >= 2 ? 'warning' : 'danger';
+
+            formatSummary.innerHTML += `
+                <div style="background: ${count > 0 ? '#f8fafc' : '#fef2f2'}; padding: 0.75rem; border-radius: 8px; border-left: 4px solid ${count > 0 ? (rating === 'success' ? '#22c55e' : rating === 'warning' ? '#f59e0b' : '#ef4444') : '#e5e7eb'};">
+                    <div style="font-weight: 600; font-size: 0.85rem; color: var(--welt-blue); margin-bottom: 0.25rem;">${cat}</div>
+                    ${count > 0 ? `
+                        <div style="font-size: 0.8rem; color: #64748b;">
+                            <span style="font-weight: 600; color: ${rating === 'success' ? '#22c55e' : rating === 'warning' ? '#f59e0b' : '#ef4444'};">${avgMa}%</span> Ø MA
+                            • ${count}x gesendet
+                            • Best: ${best}%
+                        </div>
+                    ` : `
+                        <div style="font-size: 0.8rem; color: #9ca3af;">Heute nicht gesendet</div>
+                    `}
+                </div>
+            `;
+        });
+
+        // 2. Top & Bottom Fokus-Listen
+        const focusTopList = document.getElementById('focusTopList');
+        const focusBottomList = document.getElementById('focusBottomList');
+        focusTopList.innerHTML = '';
+        focusBottomList.innerHTML = '';
+
+        // Sortierte Listen basierend auf Lead-In (nicht MA!)
+        // Funktioniert = positiver Lead-In (Zuschauer gewonnen)
+        // Nicht funktioniert = negativer Lead-In (Zuschauer verloren)
+        const goodShows = focusShows.filter(s => s.leadIn !== undefined && s.leadIn >= 0).sort((a, b) => b.leadIn - a.leadIn);
+        const badShows = focusShows.filter(s => s.leadIn !== undefined && s.leadIn < 0).sort((a, b) => a.leadIn - b.leadIn);
+
+        // Top Shows (positiver Lead-In = funktioniert)
+        if (goodShows.length === 0) {
+            document.getElementById('noFocusTop').style.display = 'block';
+        } else {
+            document.getElementById('noFocusTop').style.display = 'none';
+            goodShows.forEach((s, i) => {
+                const leadText = '+' + s.leadIn.toFixed(2) + '%';
+                const prevMa = (s.ma - s.leadIn).toFixed(2);
+                focusTopList.innerHTML += `
+                    <div class="ranking-item" style="padding: 0.75rem 1rem; flex-direction: column; align-items: stretch;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="rank-number ${i === 0 ? 'gold' : 'top'}" style="width: 28px; height: 28px; font-size: 0.8rem;">${i + 1}</div>
+                            <div class="rank-info" style="flex: 1;">
+                                <div class="rank-title" style="font-size: 0.85rem;">${s.titel.substring(0, 40)}</div>
+                                <div class="rank-time">${s.zeitStr} Uhr • ${s.kategorie}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="rank-ma top" style="font-size: 1.1rem;">${leadText}</div>
+                                <div style="font-size: 0.7rem; color: #64748b;">MA: ${s.ma.toFixed(2)}%</div>
+                            </div>
+                        </div>
+                        ${s.prevSendung ? `
+                        <div style="margin-top: 0.5rem; margin-left: 36px; padding: 0.5rem; background: #f0fdf4; border-radius: 6px; font-size: 0.8rem; border-left: 3px solid #22c55e;">
+                            <div style="color: #166534; font-weight: 500;">📈 Warum funktioniert:</div>
+                            <div style="color: #475569; margin-top: 0.25rem;">
+                                Vorgänger <strong>"${s.prevSendung.substring(0, 30)}"</strong> hatte <strong>${prevMa}% MA</strong>
+                            </div>
+                            <div style="margin-top: 0.25rem; color: #166534;">
+                                → Diese Sendung hat <strong>${leadText}</strong> mehr Zuschauer gehalten/gewonnen
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+        }
+
+        // Bottom Shows (negativer Lead-In = nicht funktioniert)
+        if (badShows.length === 0) {
+            document.getElementById('noFocusBottom').style.display = 'block';
+        } else {
+            document.getElementById('noFocusBottom').style.display = 'none';
+            badShows.forEach((s, i) => {
+                const leadText = s.leadIn.toFixed(2) + '%';
+                const prevMa = (s.ma - s.leadIn).toFixed(2);
+                focusBottomList.innerHTML += `
+                    <div class="ranking-item" style="padding: 0.75rem 1rem; flex-direction: column; align-items: stretch;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="rank-number bottom" style="width: 28px; height: 28px; font-size: 0.8rem;">${i + 1}</div>
+                            <div class="rank-info" style="flex: 1;">
+                                <div class="rank-title" style="font-size: 0.85rem;">${s.titel.substring(0, 40)}</div>
+                                <div class="rank-time">${s.zeitStr} Uhr • ${s.kategorie}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="rank-ma bottom" style="font-size: 1.1rem;">${leadText}</div>
+                                <div style="font-size: 0.7rem; color: #64748b;">MA: ${s.ma.toFixed(2)}%</div>
+                            </div>
+                        </div>
+                        ${s.prevSendung ? `
+                        <div style="margin-top: 0.5rem; margin-left: 36px; padding: 0.5rem; background: #fef2f2; border-radius: 6px; font-size: 0.8rem; border-left: 3px solid #ef4444;">
+                            <div style="color: #991b1b; font-weight: 500;">📉 Warum nicht funktioniert:</div>
+                            <div style="color: #475569; margin-top: 0.25rem;">
+                                Vorgänger <strong>"${s.prevSendung.substring(0, 30)}"</strong> hatte <strong>${prevMa}% MA</strong>
+                            </div>
+                            <div style="margin-top: 0.25rem; color: #991b1b;">
+                                → Diese Sendung hat <strong>${leadText}</strong> Zuschauer verloren
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+        }
+
+        // 3. Detail-Tabelle
+        const focusTbody = document.querySelector('#focusTable tbody');
+        focusTbody.innerHTML = '';
+        const focusContainer = document.getElementById('focusTableContainer');
+        const noFocusMsg = document.getElementById('noFocusMsg');
+
+        if (focusShows.length === 0) {
+            noFocusMsg.style.display = 'block';
+            focusContainer.style.display = 'none';
+        } else {
+            noFocusMsg.style.display = 'none';
+            focusContainer.style.display = 'block';
+
+            // Nach Zeit sortiert
+            const sortedFocus = [...focusShows].sort((a, b) => {
+                if (!a.zeit || !b.zeit) return 0;
+                return (a.zeit.hour * 60 + a.zeit.minute) - (b.zeit.hour * 60 + b.zeit.minute);
+            });
+
+            sortedFocus.forEach(s => {
+                const leadClass = s.leadIn > 0 ? 'trend-up' : s.leadIn < 0 ? 'trend-down' : '';
+                const leadText = s.leadIn !== undefined ? (s.leadIn > 0 ? '+' : '') + s.leadIn.toFixed(2) + '%' : '-';
+                const prevMa = s.leadIn !== undefined ? (s.ma - s.leadIn).toFixed(2) : null;
+
+                // Bewertung basiert auf Lead-In, nicht auf MA!
+                const funktioniert = s.leadIn !== undefined && s.leadIn >= 0;
+                const statusText = s.leadIn === undefined ? '⚪ Erste Sendung' : funktioniert ? '✅ Funktioniert' : '❌ Nicht funktioniert';
+                const statusBg = s.leadIn === undefined ? '#f1f5f9' : funktioniert ? '#dcfce7' : '#fee2e2';
+                const rowBg = s.leadIn === undefined ? '#f8fafc' : funktioniert ? '#f0fdf4' : '#fef2f2';
+
+                focusTbody.innerHTML += `<tr style="background: ${rowBg};">
+                    <td><strong>${s.zeitStr}</strong></td>
+                    <td>
+                        <div>${s.titel.substring(0, 40)}</div>
+                    </td>
+                    <td><span class="badge badge-${funktioniert ? 'success' : 'danger'}">${s.kategorie}</span></td>
+                    <td><strong>${s.ma.toFixed(2)}%</strong></td>
+                    <td>${Math.round(s.seher * 1000)} Tsd</td>
+                    <td style="font-size:0.8rem;">
+                        <div style="color:#64748b;">${(s.prevSendung || 'Erste Sendung').substring(0, 25)}</div>
+                        ${prevMa ? `<div style="color:#94a3b8;font-size:0.7rem;">hatte ${prevMa}% MA</div>` : ''}
+                    </td>
+                    <td>
+                        <div class="${leadClass}" style="font-weight: 700; font-size: 1.1rem;">${leadText}</div>
+                        <div style="font-size: 0.7rem; color: #64748b;">
+                            ${s.leadIn > 0 ? '📈 Zuschauer gewonnen' : s.leadIn < 0 ? '📉 Zuschauer verloren' : s.leadIn === 0 ? '➡️ Gleich geblieben' : ''}
+                        </div>
+                    </td>
+                    <td><span style="background:${statusBg};padding:0.3rem 0.6rem;border-radius:4px;font-size:0.8rem;font-weight:600;">${statusText}</span></td>
+                </tr>`;
+            });
+        }
+    }
+    </script>
+</body>
+</html>
